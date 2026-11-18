@@ -13,13 +13,13 @@ A full-stack developer tool that takes a GitHub repository URL, explains the cod
 1. The React frontend sends a GitHub URL to the FastAPI backend
 2. The backend clones the repo with GitPython and reads its files
 3. File contents are embedded with sentence-transformers (all-MiniLM-L6-v2) and stored in ChromaDB
-4. For a summary, a sample of the code is sent to Llama 3.3 70B through the Groq API
+4. For a summary, a sample of the code is sent to GPT-OSS 120B through the Groq API
 5. For a question, the most relevant files are retrieved from ChromaDB and passed to the LLM as context
 
 ## Tech stack
 
 - **Backend:** Python, FastAPI, Uvicorn, GitPython
-- **AI / RAG:** Groq API (llama-3.3-70b-versatile), sentence-transformers, ChromaDB
+- **AI / RAG:** Groq API (openai/gpt-oss-120b), sentence-transformers, ChromaDB
 - **Frontend:** React
 
 ## Run it locally

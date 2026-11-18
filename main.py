@@ -82,7 +82,7 @@ def analyze_repo(request: RepoRequest):
                     )
 
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[
                 {
                     "role": "system",
@@ -129,7 +129,7 @@ def ask_question(request: QuestionRequest):
             context += f"\n\n--- {path} ---\n{doc}"
 
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[
                 {
                     "role": "system",
