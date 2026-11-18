@@ -46,7 +46,7 @@ Then open http://localhost:3000 and paste a public GitHub repo URL.
 
 ## Limitations
 
-- Only the first ~1000 characters of each file are embedded, so very large files are partially indexed
+- Files are split into 1000-character chunks, and only the first ~20,000 characters of each file are indexed
 - The vector store is in memory and resets when the server restarts
 - Works with public repositories only
 

@@ -69,6 +69,10 @@ def analyze_repo(request: RepoRequest):
         summary_parts = []
 
         repo_id = request.github_url.split("/")[-1]
+        try:
+            chroma_client.delete_collection(name=repo_id)
+        except Exception:
+            pass
         collection = chroma_client.get_or_create_collection(name=repo_id)
 
         for root_dir, dirs, files in os.walk(tmp_dir):
@@ -79,7 +83,7 @@ def analyze_repo(request: RepoRequest):
 
                 try:
                     with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read(6000)
+                        content = f.read(20000)
                 except Exception:
                     content = "[could not read file]"
 
@@ -92,14 +96,16 @@ def analyze_repo(request: RepoRequest):
                     cap = 6000 if file_priority(relative_path) == 0 else 600
                     summary_parts.append((file_priority(relative_path), f"\n\n--- {relative_path} ---\n{content[:cap]}"))
 
-                if content != "[could not read file]" and len(content.strip()) > 0:
-                    embedding = embedding_model.encode(content[:1000]).tolist()
-                    collection.add(
-                        documents=[content[:1000]],
-                        embeddings=[embedding],
-                        ids=[relative_path],
-                        metadatas=[{"path": relative_path}]
-                    )
+                if content != "[could not read file]" and content.strip() and not is_noise(relative_path):
+                    chunks = [content[i:i + 1000] for i in range(0, len(content), 1000)]
+                    chunks = [c for c in chunks if c.strip()]
+                    if chunks:
+                        collection.add(
+                            documents=chunks,
+                            embeddings=embedding_model.encode(chunks).tolist(),
+                            ids=[f"{relative_path}#{n}" for n in range(len(chunks))],
+                            metadatas=[{"path": relative_path}] * len(chunks)
+                        )
 
         response = client.chat.completions.create(
             model="openai/gpt-oss-120b",
@@ -140,7 +146,7 @@ def ask_question(request: QuestionRequest):
         question_embedding = embedding_model.encode(request.question).tolist()
         results = collection.query(
             query_embeddings=[question_embedding],
-            n_results=3
+            n_results=5
         )
 
         context = ""
@@ -153,7 +159,7 @@ def ask_question(request: QuestionRequest):
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an expert software engineer. Answer questions about the codebase using the provided code context."
+                    "content": "You are an expert software engineer. Answer questions about the codebase using ONLY the provided code context. Never invent functions, files, line numbers or libraries. If the context does not contain the answer, say you could not find it in the retrieved files."
                 },
                 {
                     "role": "user",
@@ -165,7 +171,7 @@ def ask_question(request: QuestionRequest):
         return {
             "question": request.question,
             "answer": response.choices[0].message.content,
-            "relevant_files": [m["path"] for m in results["metadatas"][0]]
+            "relevant_files": list(dict.fromkeys(m["path"] for m in results["metadatas"][0]))
         }
 
     except Exception as e:
