@@ -26,6 +26,24 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 chroma_client = chromadb.Client()
 
+SKIP_EXT = (".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".lock", ".map", ".woff", ".woff2", ".pdf", ".mp4", ".zip")
+SKIP_NAMES = ("package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", ".gitignore")
+KEY_NAMES = ("readme.md", "main.py", "app.py", "server.py", "index.js", "app.js", "package.json", "pyproject.toml")
+
+
+def is_noise(path):
+    name = os.path.basename(path).lower()
+    return name in SKIP_NAMES or name.endswith(SKIP_EXT)
+
+
+def file_priority(path):
+    return 0 if os.path.basename(path).lower() in KEY_NAMES else 1
+
+
+def build_summary(parts, limit=12000):
+    parts.sort(key=lambda p: p[0])
+    return "".join(text for _, text in parts)[:limit]
+
 
 @app.get("/")
 def root():
@@ -48,7 +66,7 @@ def analyze_repo(request: RepoRequest):
         git.Repo.clone_from(request.github_url, tmp_dir)
 
         files_data = []
-        code_summary = ""
+        summary_parts = []
 
         repo_id = request.github_url.split("/")[-1]
         collection = chroma_client.get_or_create_collection(name=repo_id)
@@ -61,7 +79,7 @@ def analyze_repo(request: RepoRequest):
 
                 try:
                     with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read(3000)
+                        content = f.read(6000)
                 except Exception:
                     content = "[could not read file]"
 
@@ -70,7 +88,9 @@ def analyze_repo(request: RepoRequest):
                     "content": content
                 })
 
-                code_summary += f"\n\n--- {relative_path} ---\n{content[:500]}"
+                if not is_noise(relative_path):
+                    cap = 6000 if file_priority(relative_path) == 0 else 600
+                    summary_parts.append((file_priority(relative_path), f"\n\n--- {relative_path} ---\n{content[:cap]}"))
 
                 if content != "[could not read file]" and len(content.strip()) > 0:
                     embedding = embedding_model.encode(content[:1000]).tolist()
@@ -86,11 +106,11 @@ def analyze_repo(request: RepoRequest):
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an expert software engineer. Analyze the given codebase and provide: 1) Project summary 2) Tech stack 3) Main components 4) How it works"
+                    "content": "You are an expert software engineer. Analyze the given codebase using ONLY the provided files. Never invent libraries, files or features that are not shown; if something is not visible, say it is not shown. Provide: 1) Project summary 2) Tech stack 3) Main components 4) How it works"
                 },
                 {
                     "role": "user",
-                    "content": f"Analyze this codebase:\n{code_summary[:8000]}"
+                    "content": f"Analyze this codebase:\n{build_summary(summary_parts)}"
                 }
             ]
         )
