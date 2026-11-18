@@ -2,6 +2,10 @@
 
 A full-stack developer tool that takes a GitHub repository URL, explains the codebase in plain English, and answers natural-language questions about it using Retrieval-Augmented Generation (RAG).
 
+## Demo
+
+![AI Code Assistant demo](docs/demo.png)
+
 ## Features
 
 - **Repo analysis**: paste a GitHub link and get a project summary, tech stack, main components and how it works
